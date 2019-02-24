@@ -53,7 +53,71 @@ Object* push_obj(Object obj) {
     return &mn.obj[mn.objCnt - 1];
 }
 
+const char* getName(const char* path) {
+    for(int i = strlen(path) - 1; i >= 0; i--)
+        if(path[i] == '/')
+            return (path + i + 1);
+}
+
 int isPathCorrect(const char* path) {
+    if(!strcmp(getName(path), ".") || !strcmp(getName(path), ".."))
+        return 0;
+    return 1;
+}
+
+Object* chooseChild(Object* ob, const char *name) {
+
+}
+
+const char** getList(const char* path, int n) {
+    char *buf = (char*) malloc(strlen(path));
+    char* list[n];
+    int p = 0, k = 0;
+    for(int i = 0; i < strlen(path) + 1; i++) {
+        if(path[i] == '/' || path[i] == '\0') {
+            for (int j = 0; j < p; ++j) {
+                printf("%c", buf[j]);
+            }
+            printf("\n");
+            buf[p] = '\0';
+            list[k++] = buf;
+            p = 0;
+            continue;
+        }
+        buf[p] = path[i];
+        p++;
+    }
+    return (const char **) list;
+}
+
+int getDirNum(const char* path) {
+    int n = 0;
+    if(path[0] == '/' && path[1] == '\0')
+        return 0;
+    for(int i = 0; i < strlen(path); i++)
+        if(path[i] == '/')
+            n++;
+    return n + 1;
+}
+
+Object* getDirByPath(const char* path) {
+    Object *ob;
+    const char **list;
+    int n;
+    if(path[0] == '/') {
+        ob = mn.root;
+        n = getDirNum(path + 1);
+        list = getList(path + 1, n);
+
+        for(int i = 0; i < n; i++) {
+           printf("%s\n", list[i]);
+        }
+    }
+    else {
+        ob = mn.curDir;
+        list = getList(path, n);
+
+    }
 
 }
 
@@ -89,8 +153,9 @@ int destroyFM()
 }
 
 int createDir(const char* path) {
-    if(mn.curDir == NULL)
+    if(mn.curDir == NULL || !isPathCorrect(path))
         return 0;
+    getDirByPath(path);
 
 }
 
@@ -117,7 +182,7 @@ int main()
     printf("%p\n", mn.curDir);
     //destroyFM();
     printf("%p\n", mn.curDir);
-    createDir("/kek/cheburek/.");
+    createDir("/kek/cheburek/lol");
 
     return 0;
 }
