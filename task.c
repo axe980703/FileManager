@@ -1,125 +1,123 @@
 #include "os_file.h"
 #include <stdio.h>
 
-#define NULLDIR -1
-#define ROOT 0
-#define INIT_MEMORY 16
+#define INIT_MEMORY 1
 
 typedef struct Object Object;
 typedef struct Manager Manager;
 
 struct Object {
-    char *name;
-    int isFile;
-    int size;
-    int parentID;
-    int *childID;
+    Object *parent;
+    Object* *child;
     int childCnt;
     int childMem;
+    char* name;
+    int size;
+    int isFile;
 };
 
 struct Manager {
-    Object *obj;
+    Object* obj;
     int objCnt;
     int objMem;
     int capacity;
-    int curDir;
+    Object *curDir;
+    Object *root;
 };
 
 Manager mn;
 
-void init_child(Object *ob) {
-    ob->childMem = INIT_MEMORY;
-    ob->childCnt = 0;
-    ob->childID = (int*) malloc(sizeof(int) * ob->childMem);
-}
 
-void init_obj() {
-    mn.capacity = 0;
-    mn.curDir = NULLDIR;
-    mn.objMem = 4;
-    mn.objCnt = 0;
-    mn.obj = (Object*) malloc(sizeof(Object) * mn.objMem);
-}
-
-///// destroy child/obj and include them into rmv child/obj  THINK ABOUT EFFECTIVE MEMORY MANAGING
-
-void push_child(Object *ob, int x) {
+void push_child(Object *ob, Object *pnt) {
+    if(ob->childMem == 0) {
+        ob->childMem = INIT_MEMORY;
+        ob->child = (Object**) malloc(sizeof(Object*) * ob->childMem);
+    }
     if(ob->childCnt == ob->childMem) {
         ob->childMem *= 2;
-        int *tmp = (int*) malloc(sizeof(int) * ob->childMem);
-        for(int i = 0; i < ob->childMem / 2; i++)
-            tmp[i] = ob->childID[i];
-        free(ob->childID);
-        ob->childID = tmp;
+        ob->child = (Object**) realloc(ob->child, sizeof(Object*) * ob->childMem);
     }
-    ob->childID[ob->childCnt++] = x;
+    ob->child[ob->childCnt++] = pnt;
 }
 
-void push_obj(Object obj) {
+Object* push_obj(Object obj) {
+    if(mn.objMem == 0) {
+        mn.objMem = INIT_MEMORY;
+        mn.obj = (Object*) malloc(sizeof(Object) * mn.objMem);
+    }
     if(mn.objCnt == mn.objMem) {
         mn.objMem *= 2;
-        Object *tmp = (Object*) malloc(sizeof(Object) * mn.objMem);
-        for(int i = 0; i < mn.objMem / 2; i++)
-            tmp[i] = mn.obj[i];
-        free(mn.obj);
-        mn.obj = tmp;
+        mn.obj = (Object*) realloc(mn.obj, sizeof(Object) * mn.objMem);
     }
     mn.obj[mn.objCnt++] = obj;
+    return &mn.obj[mn.objCnt - 1];
 }
 
-void rmv_child() {
-
-}
-
-void rmv_obj() {
+int isPathCorrect(const char* path) {
 
 }
 
 int createFM(int disk_size)
 {
-    if(mn.curDir != NULLDIR)
+    if(mn.curDir != NULL || disk_size < 0)
+        return 0;
+    Object rt;
+    rt.name = "/";
+    rt.size = 0;
+    rt.isFile = 0;
+    rt.childMem = 0;
+    rt.childCnt = 0;
+    mn.capacity = disk_size;
+    mn.root = push_obj(rt);
+    mn.curDir = mn.root;
+    return 1;
+}
+
+int destroyFM()
+{
+    if(mn.curDir == NULL)
+        return 0;
+    for(int i = 0; i < mn.objCnt; i++) {
+        for(int j = 0; j < mn.obj[i].childCnt; j++)
+            free(mn.obj[i].child[j]);
+    }
+    free(mn.obj);
+    mn.curDir = NULL;
+    mn.objCnt = 0;
+    mn.objMem = 0;
+    return 1;
+}
+
+int createDir(const char* path) {
+    if(mn.curDir == NULL)
         return 0;
 
-    return 1;
 }
 
-int my_destroy()
-{
-    return 1;
-}
+void getCurDir(char* dst) {
 
-
-void my_get_cur_dir(char* dst) {
     strcpy(dst, "test");
 }
 
 void setup_file_manager(file_manager_t *fm) {
-
+    mn.objMem = 0;
+    mn.objCnt = 0;
+    mn.curDir = NULL;
     fm->create = createFM;
-    fm->destroy = my_destroy;
-    fm->get_cur_dir = my_get_cur_dir;
-
+    fm->destroy = destroyFM;
+    fm->get_cur_dir = getCurDir;
+    fm->create_dir = createDir;
 }
 
 int main()
 {
     file_manager_t fm;
     setup_file_manager(&fm);
-
-    init_obj();
-    Object ob1;
-    ob1.name = "ob1";
-    init_child(&ob1);
-    push_child(&ob1, 12);
-    push_child(&ob1, 13);
-    push_child(&ob1, 322);
-    push_obj(ob1);
-    push_obj(ob1);
-    push_obj(ob1);
-    printf("%d\n", mn.obj[1].childID[2]);
-    ob1 = mn.obj[2];
-    printf("%s", ob1.name);
+    createFM(12);
+    printf("%p\n", mn.curDir);
+    //destroyFM();
+    printf("%p\n", mn.curDir);
+    createDir("/kek/cheburek/.");
 
     return 0;
 }
