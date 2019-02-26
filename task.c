@@ -1,7 +1,7 @@
 #include "os_file.h"
 #include <stdio.h>
 
-#define INIT_MEMORY 1
+#define INIT_MEMORY 100
 
 typedef struct Object Object;
 typedef struct Manager Manager;
@@ -11,7 +11,7 @@ struct Object {
     Object* *child;
     int childCnt;
     int childMem;
-    char* name;
+    const char* name;
     int size;
     int isFile;
 };
@@ -47,7 +47,12 @@ Object* push_obj(Object obj) {
     }
     if(mn.objCnt == mn.objMem) {
         mn.objMem *= 2;
-        mn.obj = (Object*) realloc(mn.obj, sizeof(Object) * mn.objMem);
+        printf("%s", mn.obj[0].name);
+        Object *tmp = (Object*) malloc(sizeof(Object) * mn.objMem);
+        for(int i = 0; i < mn.objCnt; i++)
+            tmp[i] = mn.obj[i];
+        free(mn.obj);
+        mn.obj = tmp;
     }
     mn.obj[mn.objCnt++] = obj;
     return &mn.obj[mn.objCnt - 1];
@@ -57,68 +62,115 @@ const char* getName(const char* path) {
     for(int i = strlen(path) - 1; i >= 0; i--)
         if(path[i] == '/')
             return (path + i + 1);
-}
-
-int isPathCorrect(const char* path) {
-    if(!strcmp(getName(path), ".") || !strcmp(getName(path), ".."))
-        return 0;
-    return 1;
-}
-
-Object* chooseChild(Object* ob, const char *name) {
-
-}
-
-const char** getList(const char* path, int n) {
-    char *buf = (char*) malloc(strlen(path));
-    char* list[n];
-    int p = 0, k = 0;
-    for(int i = 0; i < strlen(path) + 1; i++) {
-        if(path[i] == '/' || path[i] == '\0') {
-            for (int j = 0; j < p; ++j) {
-                printf("%c", buf[j]);
-            }
-            printf("\n");
-            buf[p] = '\0';
-            list[k++] = buf;
-            p = 0;
-            continue;
-        }
-        buf[p] = path[i];
-        p++;
-    }
-    return (const char **) list;
+    return path;
 }
 
 int getDirNum(const char* path) {
     int n = 0;
-    if(path[0] == '/' && path[1] == '\0')
-        return 0;
     for(int i = 0; i < strlen(path); i++)
         if(path[i] == '/')
             n++;
     return n + 1;
 }
 
+const char* pathToObj(const char* path) {
+    if(path[0] != '/' && getDirNum(path) == 1)
+        return "*";
+    int pos = 0;
+    for(int i = strlen(path) - 1; i >= 0; i--) {
+        if(path[i] == '/') {
+            pos = i;
+            break;
+        }
+    }
+    if(!pos) pos = 1;
+    char *buf = (char*) malloc(sizeof(char) * (pos + 1));
+    for(int i = 0; i < pos; i++)
+        buf[i] = path[i];
+    buf[pos] = '\0';
+    return buf;
+}
+
+int isPathCorrect(const char* path) {
+    if(!strcmp(getName(path), ".") || !strcmp(getName(path), "..") || !strcmp(path, "/"))
+        return 0;
+    return 1;
+}
+
+int isAlreadyExists(Object* ob, const char* name) {
+    for(int i = 0; i < ob->childCnt; i++)
+        if(!strcmp(ob->child[i]->name, name))
+            return 1;
+    return 0;
+}
+
+Object* nextChild(Object* ob, const char *name) {
+    if(!strcmp(name, ".")) return ob;
+    if(!strcmp(name, "..")) {
+        if(ob == mn.root)
+            return NULL;
+        return ob->parent;
+    }
+    for(int i = 0; i < ob->childCnt; i++) {
+        if(!strcmp(ob->child[i]->name, name) && !ob->isFile) {
+            return ob->child[i];
+        }
+    }
+    return NULL;
+}
+
+char** getList(const char* path, int n) {
+    char **list = (char**) malloc(sizeof(char*) * n);
+    int lng = strlen(path);
+    int k = 0, t = 0;
+    char buf[lng];
+    for(int i = 0; i < lng + 1; i++) {
+        if(path[i] == '/' || path[i] == '\0') {
+            list[k] = (char*) malloc(sizeof(char) * (t + 1));
+            list[k][t] = '\0';
+            strncpy(list[k++], buf, (size_t) t);
+            t = 0;
+            continue;
+        }
+        buf[t] = path[i];
+        t++;
+    }
+    return list;
+}
+
+
 Object* getDirByPath(const char* path) {
     Object *ob;
-    const char **list;
-    int n;
+    char **list;
+    int n = 0;
     if(path[0] == '/') {
         ob = mn.root;
-        n = getDirNum(path + 1);
-        list = getList(path + 1, n);
-
-        for(int i = 0; i < n; i++) {
-           printf("%s\n", list[i]);
+        if(strcmp(path, "/")) {
+            n = getDirNum(path + 1);
+            list = getList(path + 1, n);
+            for(int i = 0; i < n; i++) {
+                ob = nextChild(ob, list[i]);
+                if(ob == NULL)
+                    return NULL;
+            }
         }
     }
     else {
         ob = mn.curDir;
-        list = getList(path, n);
-
+        if(strcmp(path, "*")) {
+            n = getDirNum(path);
+            list = getList(path, n);
+            for(int i = 0; i < n; i++) {
+                ob = nextChild(ob, list[i]);
+                if(ob == NULL)
+                    return NULL;
+            }
+        }
     }
-
+    for(int i = 0; i < n; i ++)
+        free(list[i]);
+    free(list);
+    return ob;
 }
 
 int createFM(int disk_size)
@@ -155,8 +207,21 @@ int destroyFM()
 int createDir(const char* path) {
     if(mn.curDir == NULL || !isPathCorrect(path))
         return 0;
-    getDirByPath(path);
-
+    const char *pth = pathToObj(path);
+    Object *ob = getDirByPath(pth);
+    if(ob == NULL)
+        return 0;
+    if(isAlreadyExists(ob, getName(path)))
+        return 0;
+    Object folder;
+    folder.parent = ob;
+    folder.name = getName(path);
+    folder.childMem = 0;
+    folder.childCnt = 0;
+    folder.isFile = 0;
+    push_child(ob, push_obj(folder));
+    free((void *) pth);
+    return 1;
 }
 
 void getCurDir(char* dst) {
@@ -181,8 +246,11 @@ int main()
     createFM(12);
     printf("%p\n", mn.curDir);
     //destroyFM();
-    printf("%p\n", mn.curDir);
-    createDir("/kek/cheburek/lol");
+    printf("%p\n", mn.root);
+    printf("%d", createDir("/cheburek"));
+    printf("%d", createDir("/cheburek/kek"));
+    printf("%d", createDir("/cheburek/kek"));
+    printf("%d", createDir("/cheburek/kek."));
 
     return 0;
 }
