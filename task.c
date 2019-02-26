@@ -316,16 +316,28 @@ int removeObj(const char* path, int recursive) {
         push_hole(getObjIndex(obj));
         *obj = NULL;
     }
-
+    //recursivly null all files and dirs until each dir
 
     return 1;
 }
 
 int changeDir(const char* path) {
-
+    if(mn.curDir == NULL || !isPathCorrect(path))
+        return 0;
+    Object *obj = getDirByPath(path);
+    if(obj == NULL)
+        return 0;
+    if(obj->isFile)
+        return 0;
+    mn.curDir = obj;
+    return 1;
 }
 
 void getCurDir(char* dst) {
+    /////////////////// if manager not created ???
+    int n = 0, k = 0;
+    Object *ob = mn.curDir;
+    while(ob != mn.root) n++;
 
     strcpy(dst, "test");
 }
