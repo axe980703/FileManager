@@ -397,21 +397,22 @@ void copyOnce(Object* parent, Object* ob, const char* name, int k, int *cnt) {
 
 int copyObj(const char *path, const char *toPath) {
     if(mn.curDir == NULL || !isPathCorrect(path) || !isPathCorrect(toPath))
-        return 0;
+        return -1;
     const char *pth = pathToObj(toPath);
     const char *name = getName(toPath);
     Object *ob = getDirByPath(path);
     Object *to = getDirByPath(pth);
     if(ob == NULL || to == NULL)
-        return 0;
+        return -1;
     if(mn.root->size + ob->size > mn.size)
-        return 0;
+        return -1;
     if(ob->parent == to || to->isFile)
-        return 0;
+        return -1;
     int count = 0;
     copyOnce(to, ob, name, 0, &count);
     updateSizeInfo(to, ob->size);
     free((void*) pth);
+    return count;
 }
 
 void setup_file_manager(file_manager_t *fm) {
