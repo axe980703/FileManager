@@ -1,7 +1,7 @@
 #include "os_file.h"
 #include <stdio.h>
 
-#define INIT_MEMORY 100
+#define INIT_MEMORY 200
 
 typedef struct Object Object;
 typedef struct Manager Manager;
@@ -372,14 +372,46 @@ void getCurDir(char* dst) {
     dst[strlen(dst) - 1] = '\0';
 }
 
+void copyOnce(Object* parent, Object* ob, const char* name, int k, int *cnt) {
+    Object file;
+    file.parent = parent;
+    if(!k)
+        file.name = name;
+    else
+        file.name = ob->name;
+    file.childMem = 0;
+    file.childCnt = 0;
+    file.isFile = ob->isFile;
+    cnt += file.isFile;
+    file.size = ob->size;
+    Object *tmp = push_obj(file);
+    push_child(parent, tmp);
+    if(ob->isFile || !getChildCount(ob))
+        return;
+    for(int i = 0; i < ob->childCnt; i++) {
+        if(ob->child[i] != NULL) {
+            copyOnce(tmp, ob->child[i], "", k + 1, cnt);
+        }
+    }
+}
+
 int copyObj(const char *path, const char *toPath) {
-    if(mn.curDir == NULL || !isPathCorrect(path))
+    if(mn.curDir == NULL || !isPathCorrect(path) || !isPathCorrect(toPath))
         return 0;
+    const char *pth = pathToObj(toPath);
+    const char *name = getName(toPath);
     Object *ob = getDirByPath(path);
-    if(ob == NULL)
+    Object *to = getDirByPath(pth);
+    if(ob == NULL || to == NULL)
         return 0;
     if(mn.root->size + ob->size > mn.size)
         return 0;
+    if(ob->parent == to || to->isFile)
+        return 0;
+    int count = 0;
+    copyOnce(to, ob, name, 0, &count);
+    updateSizeInfo(to, ob->size);
+    free((void*) pth);
 }
 
 void setup_file_manager(file_manager_t *fm) {
@@ -396,22 +428,3 @@ void setup_file_manager(file_manager_t *fm) {
     fm->copy = copyObj;
 }
 
-int main()
-{
-    file_manager_t fm;
-    setup_file_manager(&fm);
-    createFM(20);
-    printf("%p\n", mn.curDir);
-    //destroyFM();
-    printf("%p\n", mn.root);
-    printf("%d", createDir("a"));
-    printf("%d", createDir("a/b"));
-    printf("%d", createFile("a/b/c", 12));
-    printf("%d", createDir("a/b/d"));
-    printf("%d", createDir("a/b/e"));
-    printf("%d\n", createDir("a/b/d/f"));
-
-
-
-    return 0;
-}
