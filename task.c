@@ -40,7 +40,8 @@ void push_hole(int x) {
 
 int get_hole() {
     int x = mn.holCnt - 1;
-    if(mn.holCnt == 1)
+    mn.holCnt--;
+    if(mn.holCnt == 0)
         mn.holCnt = -1;
     return mn.holes[x];
 }
@@ -73,7 +74,6 @@ Object* push_obj(Object obj) {
     }
     if(mn.holCnt > 0) {
         int n = get_hole();
-        mn.obj[n] = obj;
         mn.obj[n] = obj;
         return &mn.obj[n];
     }
@@ -134,6 +134,7 @@ int getChildCount(Object* ob) {
             n++;
     return n;
 }
+
 
 int getIndex(Object* ob, Object* c) {
     for(int i = 0; i < ob->childCnt; i++)
@@ -220,7 +221,6 @@ Object* getDirByPath(const char* path) {
     }
     for(int i = 0; i < n; i ++)
         free(list[i]);
-    free(list);
     return ob;
 }
 
@@ -301,6 +301,26 @@ int createFile(const char* path, int fileSize) {
     return 1;
 }
 
+void deleteThis(Object *ob) {
+    if(ob == mn.curDir)
+        mn.curDir = mn.root;
+    if(ob->isFile) {
+        push_hole(getObjIndex(ob));
+        return;
+    }
+    if(!getChildCount(ob)) {
+        push_hole(getObjIndex(ob));
+        return;
+    }
+    for(int i = 0; i < ob->childCnt; i++) {
+        if(ob->child[i] != NULL) {
+            deleteThis(ob->child[i]);
+        }
+    }
+    push_hole(getObjIndex(ob));
+    free(ob->child);
+}
+
 int removeObj(const char* path, int recursive) {
     if(mn.curDir == NULL || !isPathCorrect(path))
         return 0;
@@ -309,20 +329,14 @@ int removeObj(const char* path, int recursive) {
         return 0;
     if(getChildCount(obj) && !recursive)
         return 0;
-    if(obj == mn.curDir)
-        mn.curDir = mn.root;
-    if(obj->isFile) {
-        *obj->parent->child[getIndex(obj->parent, obj)] = NULL;
-        push_hole(getObjIndex(obj));
-        *obj = NULL;
-    }
-    //recursivly null all files and dirs until each dir
-
+    updateSizeInfo(obj, -obj->size);
+    obj->parent->child[getIndex(obj->parent, obj)] = NULL;
+    deleteThis(obj);
     return 1;
 }
 
 int changeDir(const char* path) {
-    if(mn.curDir == NULL || !isPathCorrect(path))
+    if(mn.curDir == NULL)
         return 0;
     Object *obj = getDirByPath(path);
     if(obj == NULL)
@@ -333,17 +347,39 @@ int changeDir(const char* path) {
     return 1;
 }
 
-void getCurDir(char* dst) {
-    /////////////////// if manager not created ???
-    int n = 0, k = 0;
-    Object *ob = mn.curDir;
-    while(ob != mn.root) n++;
+void reverseString(char* str) {
+    int len = strlen(str) - 1;
+    for(int i = 0; i < len / 2 ; i++) {
+        char t = str[i];
+        str[i] = str[len - i];
+        str[len - i] = t;
+    }
+}
 
-    strcpy(dst, "test");
+void getCurDir(char* dst) {
+    Object *ob = mn.curDir;
+    if(ob == mn.root) {
+        strcpy(dst, "/");
+        return;
+    }
+    strcpy(dst, "/");
+    while(ob != mn.root) {
+        strcat(dst, ob->name);
+        strcat(dst, "/");
+        ob = ob->parent;
+    }
+    reverseString(dst);
+    dst[strlen(dst) - 1] = '\0';
 }
 
 int copyObj(const char *path, const char *toPath) {
-
+    if(mn.curDir == NULL || !isPathCorrect(path))
+        return 0;
+    Object *ob = getDirByPath(path);
+    if(ob == NULL)
+        return 0;
+    if(mn.root->size + ob->size > mn.size)
+        return 0;
 }
 
 void setup_file_manager(file_manager_t *fm) {
@@ -368,13 +404,13 @@ int main()
     printf("%p\n", mn.curDir);
     //destroyFM();
     printf("%p\n", mn.root);
-    printf("%d", createDir("/cheburek"));
-    printf("%d", createDir("/cheburek/kek"));
-    printf("%d", createDir("/cheburek/kek"));
-    printf("%d", createDir("ab"));
-    printf("%d\n", createDir("cd"));
-    printf("%d", createFile("cd/ab.mp3", 5));
-    printf("%d", createFile("cd/././../ab", 5));
+    printf("%d", createDir("a"));
+    printf("%d", createDir("a/b"));
+    printf("%d", createFile("a/b/c", 12));
+    printf("%d", createDir("a/b/d"));
+    printf("%d", createDir("a/b/e"));
+    printf("%d\n", createDir("a/b/d/f"));
+
 
 
     return 0;
