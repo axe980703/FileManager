@@ -6,6 +6,7 @@ using namespace std;
 
 int create(int size, int num_pages) {
 
+
 }
 
 int destroy() {
