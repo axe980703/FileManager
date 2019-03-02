@@ -158,9 +158,22 @@ Object* nextChild(Object* ob, const char *name) {
         return ob->parent;
     }
     for(int i = 0; i < ob->childCnt; i++)
-        if(ob->child[i] != nullptr && !strcmp(ob->child[i]->name, name) && !ob->isFile)
+        if(ob->child[i] != nullptr && !strcmp(ob->child[i]->name, name) && !ob->child[i]->isFile)
             return ob->child[i];
     return nullptr;
+}
+
+Object* nextChild1(Object* ob, const char *name, int isLast) {
+    if(!strcmp(name, ".")) return ob;
+    if(!strcmp(name, "..")) {
+        if(ob == mn.root)
+            return NULL;
+        return ob->parent;
+    }
+    for(int i = 0; i < ob->childCnt; i++)
+        if(ob->child[i] != NULL && !strcmp(ob->child[i]->name, name) && (!ob->child[i]->isFile || isLast))
+            return ob->child[i];
+    return NULL;
 }
 
 char** getList(const char* path, int n) {
@@ -193,31 +206,37 @@ void updateSizeInfo(Object* ob, int size) {
     }
 }
 
-Object* getDirByPath(const char* path) {
+Object* getDirByPath(const char* path, int onlyDir) {
     Object *ob;
     char **list;
     int n = 0;
     if(path[0] == '/') {
         ob = mn.root;
-        if(strcmp(path, "/") != 0) {
+        if(strcmp(path, "/")) {
             n = getDirNum(path + 1);
             list = getList(path + 1, n);
             for(int i = 0; i < n; i++) {
-                ob = nextChild(ob, list[i]);
-                if(ob == nullptr)
-                    return nullptr;
+                if(onlyDir)
+                    ob = nextChild(ob, list[i]);
+                else
+                    ob = nextChild1(ob, list[i], (i == n - 1? 1 : 0));
+                if(ob == NULL)
+                    return NULL;
             }
         }
     }
     else {
         ob = mn.curDir;
-        if(strcmp(path, "*") != 0) {
+        if(strcmp(path, "*")) {
             n = getDirNum(path);
             list = getList(path, n);
             for(int i = 0; i < n; i++) {
-                ob = nextChild(ob, list[i]);
-                if(ob == nullptr)
-                    return nullptr;
+                if(onlyDir)
+                    ob = nextChild(ob, list[i]);
+                else
+                    ob = nextChild1(ob, list[i], (i == n - 1? 1 : 0));
+                if(ob == NULL)
+                    return NULL;
             }
         }
     }
@@ -246,12 +265,9 @@ int destroyFM()
 {
     if(mn.curDir == nullptr)
         return 0;
-    for(int i = 0; i < mn.objCnt; i++) {
-        for(int j = 0; j < mn.obj[i].childCnt; j++)
-            free(mn.obj[i].child[j]);
-    }
     free(mn.obj);
     free(mn.holes);
+    mn.holCnt = 0;
     mn.curDir = nullptr;
     mn.objCnt = 0;
     mn.objMem = 0;
@@ -262,7 +278,7 @@ int createDir(const char* path) {
     if(mn.curDir == nullptr || !isPathCorrect(path))
         return 0;
     const char *pth = pathToObj(path);
-    Object *parent = getDirByPath(pth);
+    Object *parent = getDirByPath(pth, 1);
     if(parent == nullptr)
         return 0;
     if(isAlreadyExists(parent, getName(path)))
@@ -282,7 +298,7 @@ int createFile(const char* path, int fileSize) {
     if(mn.curDir == nullptr || !isPathCorrect(path))
         return 0;
     const char *pth = pathToObj(path);
-    Object *parent = getDirByPath(pth);
+    Object *parent = getDirByPath(pth, 1);
     if(parent == nullptr)
         return 0;
     if(isAlreadyExists(parent, getName(path)))
@@ -318,13 +334,12 @@ void deleteThis(Object *ob) {
         }
     }
     push_hole(getObjIndex(ob));
-    free(ob->child);
 }
 
 int removeObj(const char* path, int recursive) {
     if(mn.curDir == nullptr || !isPathCorrect(path))
         return 0;
-    Object *obj = getDirByPath(path);
+    Object *obj = getDirByPath(path, 0);
     if(obj == nullptr)
         return 0;
     if(getChildCount(obj) && !recursive)
@@ -338,7 +353,7 @@ int removeObj(const char* path, int recursive) {
 int changeDir(const char* path) {
     if(mn.curDir == nullptr)
         return 0;
-    Object *obj = getDirByPath(path);
+    Object *obj = getDirByPath(path, 1);
     if(obj == nullptr)
         return 0;
     if(obj->isFile)
@@ -368,7 +383,6 @@ void getCurDir(char* dst) {
         strcat(dst, "/");
         ob = ob->parent;
     }
-    reverseString(dst);
     dst[strlen(dst) - 1] = '\0';
 }
 
@@ -382,7 +396,7 @@ void copyOnce(Object* parent, Object* ob, const char* name, int k, int *cnt) {
     file.childMem = 0;
     file.childCnt = 0;
     file.isFile = ob->isFile;
-    cnt += file.isFile;
+    *cnt += file.isFile;
     file.size = ob->size;
     Object *tmp = push_obj(file);
     push_child(parent, tmp);
@@ -400,8 +414,8 @@ int copyObj(const char *path, const char *toPath) {
         return -1;
     const char *pth = pathToObj(toPath);
     const char *name = getName(toPath);
-    Object *ob = getDirByPath(path);
-    Object *to = getDirByPath(pth);
+    Object *ob = getDirByPath(path, 0);
+    Object *to = getDirByPath(pth, 1);
     if(ob == nullptr || to == nullptr)
         return -1;
     if(mn.root->size + ob->size > mn.size)
